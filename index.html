@@ -71,7 +71,7 @@ h1{margin:0;font-size:30px;line-height:1.1}
   <div class="meta" id="info">0 palavras.</div>
   <div class="set">
     <div class="row"><label for="fs">Tamanho da letra</label><input id="fs" type="range" min="22" max="64" step="1"><output id="fsO"></output></div>
-    <div class="row"><label for="sp">Velocidade</label><input id="sp" type="range" min="1" max="20" step="1"><output id="spO"></output></div>
+    <div class="row"><label for="sp">Palavras por minuto</label><input id="sp" type="range" min="60" max="260" step="10"><output id="spO"></output></div>
     <div class="row"><label for="mg">Margem lateral</label><input id="mg" type="range" min="2" max="20" step="1"><output id="mgO"></output></div>
     <div class="row"><label for="ht">Altura do texto</label><input id="ht" type="range" min="25" max="70" step="1"><output id="htO"></output></div>
     <div class="row"><label for="cd">Contagem</label><input id="cd" type="range" min="0" max="10" step="1"><output id="cdO"></output></div>
@@ -119,7 +119,7 @@ const store = {
   get(k, d){ try { const v = localStorage.getItem('tp_' + k); return v === null ? d : v; } catch(e){ return d; } },
   set(k, v){ try { localStorage.setItem('tp_' + k, v); } catch(e){} }
 };
-const S = { fs:+store.get('fs',38), sp:+store.get('sp',6), mg:+store.get('mg',7), ht:+store.get('ht',46), cd:+store.get('cd',3) };
+const S = { fs:+store.get('fs',38), sp:+store.get('wpm',140), mg:+store.get('mg',7), ht:+store.get('ht',46), cd:+store.get('cd',3) };
 const SAMPLE = 'Olá.\nEu sou Eloy Ojea Gomes, promotor de Justiça.\nEste é um texto de exemplo.\nApague e escreva o seu roteiro.';
 
 const script = $('script');
@@ -127,7 +127,7 @@ script.value = store.get('script', SAMPLE);
 
 function countWords(){
   const n = (script.value.trim().match(/\S+/g) || []).length;
-  const sec = Math.round(n / 140 * 60);
+  const sec = Math.round(n / (S.sp || 140) * 60);
   $('info').textContent = n + ' palavras. Leitura aproximada de ' + Math.floor(sec/60) + ' min ' + (sec%60) + ' s.';
 }
 script.addEventListener('input', () => { store.set('script', script.value); countWords(); });
@@ -137,7 +137,7 @@ const units = { fs:'', sp:'', mg:'%', ht:'%', cd:' s' };
 for (const k of Object.keys(units)) {
   const el = $(k), out = $(k + 'O');
   el.value = S[k]; out.textContent = S[k] + units[k];
-  el.addEventListener('input', () => { S[k] = +el.value; out.textContent = S[k] + units[k]; store.set(k, S[k]); applyLayout(); });
+  el.addEventListener('input', () => { S[k] = +el.value; out.textContent = S[k] + units[k]; store.set(k === 'sp' ? 'wpm' : k, S[k]); applyLayout(); countWords(); });
 }
 
 /* Estado */
@@ -151,7 +151,10 @@ function applyLayout(){
   text.style.fontSize = S.fs + 'px';
   $('spd').textContent = S.sp;
 }
-function pxPerSec(){ return S.sp * S.fs * 0.075; }
+function pxPerSec(){
+  const words = (text.textContent.match(/\S+/g) || []).length || 1;
+  return (text.scrollHeight / words) * S.sp / 60;
+}
 function startY(){ return view.clientHeight * 0.30; }
 function draw(){ text.style.transform = 'translateY(' + (-y + startY()) + 'px)'; }
 
@@ -280,8 +283,8 @@ $('back').addEventListener('click', closeCam);
 $('rec').addEventListener('click', () => recording ? stopAll() : startRec());
 $('pause').addEventListener('click', () => setRunning(!running));
 $('top').addEventListener('click', () => { y = 0; draw(); });
-$('slow').addEventListener('click', () => { S.sp = Math.max(1, S.sp - 1); store.set('sp', S.sp); $('sp').value = S.sp; $('spO').textContent = S.sp; applyLayout(); });
-$('fast').addEventListener('click', () => { S.sp = Math.min(20, S.sp + 1); store.set('sp', S.sp); $('sp').value = S.sp; $('spO').textContent = S.sp; applyLayout(); });
+$('slow').addEventListener('click', () => { S.sp = Math.max(60, S.sp - 10); store.set('wpm', S.sp); $('sp').value = S.sp; $('spO').textContent = S.sp; applyLayout(); });
+$('fast').addEventListener('click', () => { S.sp = Math.min(260, S.sp + 10); store.set('wpm', S.sp); $('sp').value = S.sp; $('spO').textContent = S.sp; applyLayout(); });
 view.addEventListener('click', () => setRunning(!running));
 /* arrastar o texto com o dedo para ajustar a posição */
 let dragY = null;
