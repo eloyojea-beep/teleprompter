@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prompter">
+<meta name="theme-color" content="#12141a">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<title>Teleprompter</title>
+<style>
+:root{--bg:#12141a;--card:#1c1f28;--ink:#f4efe6;--mute:#9aa0ad;--red:#e5383b;--line:#2b2f3a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:17px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;overscroll-behavior:none}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.hide{display:none!important}
+
+/* Tela 1: roteiro */
+#edit{min-height:100%;padding:calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 18px);display:flex;flex-direction:column;gap:16px;max-width:720px;margin:0 auto}
+h1{margin:0;font-size:30px;line-height:1.1}
+#script{width:100%;min-height:38vh;flex:1;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:14px;font:17px/1.5 inherit;font-family:inherit;text-align:justify;resize:vertical}
+#script:focus,input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.meta{color:var(--mute);font-size:14px;text-align:justify}
+.set{background:var(--card);border-radius:14px;padding:6px 14px}
+.row{display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row label{flex:0 0 112px;font-size:15px}
+.row input[type=range]{flex:1;accent-color:var(--ink);height:44px}
+.row output{flex:0 0 40px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mute)}
+.sw{margin-left:auto;width:52px;height:32px;accent-color:var(--red)}
+.go{display:flex;gap:10px}
+.btn{flex:1;min-height:54px;border-radius:14px;background:var(--card);font-weight:600}
+.btn.main{background:var(--red);color:#fff}
+
+/* Tela 2: prompter */
+#stage{position:fixed;inset:0;background:#000;overflow:hidden}
+#cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#shade{position:absolute;left:0;right:0;top:0;height:var(--h,46%);background:linear-gradient(rgba(0,0,0,.82),rgba(0,0,0,.72) 85%,rgba(0,0,0,0))}
+#view{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 8px);height:calc(var(--h,46%) - env(safe-area-inset-top) - 8px);overflow:hidden;
+  -webkit-mask-image:linear-gradient(transparent,#000 12%,#000 82%,transparent);mask-image:linear-gradient(transparent,#000 12%,#000 82%,transparent)}
+#text{position:absolute;left:0;right:0;top:0;padding:0 var(--m,7%);will-change:transform;white-space:pre-wrap;text-align:justify;hyphens:auto;-webkit-hyphens:auto;font-weight:600;line-height:1.35;color:#fff;text-shadow:0 1px 3px #000}
+#text.mirror{transform-origin:center}
+#mark{position:absolute;left:0;width:14px;height:0;border:8px solid transparent;border-left-color:var(--red);border-right:0}
+#count{position:absolute;inset:0;display:grid;place-items:center;font-size:140px;font-weight:700;color:#fff;text-shadow:0 2px 12px #000;pointer-events:none}
+#tip{white-space:pre-line;position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 112px);text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 4px #000;pointer-events:none}
+#bar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom) + 14px);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.ic{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:15px;font-weight:700;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.ic svg{width:22px;height:22px;fill:#fff}
+#rec{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:transparent;display:grid;place-items:center}
+#rec i{display:block;width:58px;height:58px;border-radius:50%;background:var(--red);transition:all .2s}
+#rec.on i{width:28px;height:28px;border-radius:7px}
+#spd{min-width:44px;text-align:center;color:#fff;font-size:14px;font-variant-numeric:tabular-nums}
+.grp{display:flex;align-items:center;gap:6px}
+#clock{position:absolute;top:calc(env(safe-area-inset-top) + 8px);right:14px;background:var(--red);color:#fff;font-size:13px;font-weight:700;padding:3px 9px;border-radius:20px;font-variant-numeric:tabular-nums;z-index:2}
+
+/* Tela 3: resultado */
+#done{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;gap:14px;padding:calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 18px)}
+#play{flex:1;min-height:0;width:100%;background:#000;border-radius:14px;object-fit:contain}
+#msg{margin:0;color:var(--mute);font-size:15px;text-align:justify;white-space:pre-line}
+@media (prefers-reduced-motion:reduce){#rec i{transition:none}}
+</style>
+</head>
+<body>
+
+<section id="edit">
+  <h1>Teleprompter</h1>
+  <textarea id="script" placeholder="Cole ou escreva aqui o texto do vídeo."></textarea>
+  <div class="meta" id="info">0 palavras.</div>
+  <div class="set">
+    <div class="row"><label for="fs">Tamanho da letra</label><input id="fs" type="range" min="22" max="64" step="1"><output id="fsO"></output></div>
+    <div class="row"><label for="sp">Velocidade</label><input id="sp" type="range" min="1" max="20" step="1"><output id="spO"></output></div>
+    <div class="row"><label for="mg">Margem lateral</label><input id="mg" type="range" min="2" max="20" step="1"><output id="mgO"></output></div>
+    <div class="row"><label for="ht">Altura do texto</label><input id="ht" type="range" min="25" max="70" step="1"><output id="htO"></output></div>
+    <div class="row"><label for="cd">Contagem</label><input id="cd" type="range" min="0" max="10" step="1"><output id="cdO"></output></div>
+  </div>
+  <div class="go">
+    <button class="btn main" id="start">Abrir câmera</button>
+  </div>
+  <div class="meta">O texto e os ajustes ficam guardados neste aparelho.</div>
+</section>
+
+<section id="stage" class="hide">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="shade"></div>
+  <div id="view"><div id="text"></div></div>
+  <div id="clock" class="hide">00:00</div>
+  <div id="count" class="hide"></div>
+  <div id="tip"></div>
+  <div id="bar">
+    <button class="ic" id="back" aria-label="Voltar ao texto"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 14 3.2 5.2 12l8.8 8.8 1.4-1.4L8 12z"/></svg></button>
+    <div class="grp">
+      <button class="ic" id="slow" aria-label="Mais devagar">−</button>
+      <span id="spd"></span>
+      <button class="ic" id="fast" aria-label="Mais rápido">+</button>
+    </div>
+    <button id="rec" aria-label="Gravar"><i></i></button>
+    <button class="ic" id="pause" aria-label="Rolar sem gravar"><svg viewBox="0 0 24 24" id="pIcon"><path d="M8 5v14l11-7z"/></svg></button>
+    <button class="ic" id="top" aria-label="Voltar ao início"><svg viewBox="0 0 24 24"><path d="M12 4 4 12l1.4 1.4L11 7.8V20h2V7.8l5.6 5.6L20 12z"/></svg></button>
+  </div>
+</section>
+
+<section id="done" class="hide">
+  <video id="play" playsinline controls></video>
+  <p id="msg"></p>
+  <button class="btn main" id="save">Salvar vídeo</button>
+  <div class="go">
+    <button class="btn" id="again">Gravar de novo</button>
+    <button class="btn" id="toText">Voltar ao texto</button>
+  </div>
+</section>
+
+<script>
+{
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try { const v = localStorage.getItem('tp_' + k); return v === null ? d : v; } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem('tp_' + k, v); } catch(e){} }
+};
+const S = { fs:+store.get('fs',38), sp:+store.get('sp',6), mg:+store.get('mg',7), ht:+store.get('ht',46), cd:+store.get('cd',3) };
+const SAMPLE = 'Olá.\nEu sou Eloy Ojea Gomes, promotor de Justiça.\nEste é um texto de exemplo.\nApague e escreva o seu roteiro.';
+
+const script = $('script');
+script.value = store.get('script', SAMPLE);
+
+function countWords(){
+  const n = (script.value.trim().match(/\S+/g) || []).length;
+  const sec = Math.round(n / 140 * 60);
+  $('info').textContent = n + ' palavras. Leitura aproximada de ' + Math.floor(sec/60) + ' min ' + (sec%60) + ' s.';
+}
+script.addEventListener('input', () => { store.set('script', script.value); countWords(); });
+countWords();
+
+const units = { fs:'', sp:'', mg:'%', ht:'%', cd:' s' };
+for (const k of Object.keys(units)) {
+  const el = $(k), out = $(k + 'O');
+  el.value = S[k]; out.textContent = S[k] + units[k];
+  el.addEventListener('input', () => { S[k] = +el.value; out.textContent = S[k] + units[k]; store.set(k, S[k]); applyLayout(); });
+}
+
+/* Estado */
+let stream = null, rec = null, chunks = [], blob = null, mime = '';
+let y = 0, running = false, last = 0, recording = false, t0 = 0, wake = null, clockTimer = null;
+
+const text = $('text'), view = $('view');
+function applyLayout(){
+  document.documentElement.style.setProperty('--h', S.ht + '%');
+  document.documentElement.style.setProperty('--m', S.mg + '%');
+  text.style.fontSize = S.fs + 'px';
+  $('spd').textContent = S.sp;
+}
+function pxPerSec(){ return S.sp * S.fs * 0.075; }
+function startY(){ return view.clientHeight * 0.30; }
+function draw(){ text.style.transform = 'translateY(' + (-y + startY()) + 'px)'; }
+
+function tick(now){
+  if (!running) return;
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  y += pxPerSec() * dt;
+  const end = text.scrollHeight - view.clientHeight * 0.25;
+  if (y >= end) { y = end; draw(); if (!recording) setRunning(false); return; }
+  draw();
+  requestAnimationFrame(tick);
+}
+function setRunning(on){
+  running = on;
+  $('pIcon').innerHTML = on ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+  if (on) { last = performance.now(); requestAnimationFrame(tick); }
+  $('tip').textContent = on ? '' : (recording ? 'Rolagem pausada. Toque no texto para continuar.' : '');
+}
+
+function tip(msg){ $('tip').textContent = msg; }
+
+async function openCam(){
+  text.textContent = script.value || ' ';
+  y = 0; applyLayout();
+  $('edit').classList.add('hide'); $('stage').classList.remove('hide');
+  draw();
+  try { wake = await navigator.wakeLock?.request('screen'); } catch(e){}
+  if (stream) return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:'user', width:{ideal:1080}, height:{ideal:1920}, frameRate:{ideal:30} },
+      audio:{ echoCancellation:true, noiseSuppression:true }
+    });
+    $('cam').srcObject = stream;
+    tip('Toque no botão vermelho para gravar.\nToque no texto para pausar.');
+  } catch(e) {
+    stream = null;
+    tip('Câmera indisponível.\nO texto rola, mas não grava.\nVerifique a permissão de câmera do Safari.');
+    $('rec').classList.add('hide');
+  }
+}
+function closeCam(){
+  stopAll();
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  try { wake?.release(); } catch(e){} wake = null;
+  $('stage').classList.add('hide'); $('rec').classList.remove('hide');
+  $('edit').classList.remove('hide');
+}
+
+function countdown(sec){
+  return new Promise(res => {
+    if (!sec) return res();
+    const c = $('count'); c.classList.remove('hide');
+    let n = sec; c.textContent = n;
+    const iv = setInterval(() => {
+      n--; if (n <= 0) { clearInterval(iv); c.classList.add('hide'); res(); } else c.textContent = n;
+    }, 1000);
+  });
+}
+
+function pickMime(){
+  const opts = ['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm'];
+  if (!window.MediaRecorder) return null;
+  for (const m of opts) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch(e){} }
+  return '';
+}
+
+async function startRec(){
+  if (!stream) return;
+  mime = pickMime();
+  if (mime === null) { tip('Este aparelho não permite gravar pela página.\nAtualize o iOS.'); return; }
+  $('rec').disabled = true; tip('');
+  y = 0; draw();
+  await countdown(S.cd);
+  chunks = [];
+  try { rec = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond:6000000 } : undefined); }
+  catch(e) { rec = new MediaRecorder(stream); }
+  rec.ondataavailable = ev => { if (ev.data && ev.data.size) chunks.push(ev.data); };
+  rec.onstop = finish;
+  rec.start(1000);
+  recording = true; $('rec').classList.add('on'); $('rec').disabled = false;
+  t0 = Date.now(); $('clock').classList.remove('hide'); $('clock').textContent = '00:00';
+  clockTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $('clock').textContent = String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+  }, 500);
+  setRunning(true);
+}
+function stopAll(){
+  setRunning(false);
+  clearInterval(clockTimer); $('clock').classList.add('hide');
+  $('rec').classList.remove('on');
+  if (recording && rec && rec.state !== 'inactive') { recording = false; rec.stop(); }
+  recording = false;
+}
+function finish(){
+  const type = (rec && rec.mimeType) || mime || 'video/mp4';
+  blob = new Blob(chunks, { type });
+  $('play').src = URL.createObjectURL(blob);
+  $('msg').textContent = 'Gravação concluída.\nToque em Salvar vídeo e escolha "Salvar Vídeo" para mandar ao Fotos.';
+  $('stage').classList.add('hide'); $('done').classList.remove('hide');
+}
+
+async function save(){
+  if (!blob) return;
+  const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+  const file = new File([blob], 'video-livro-' + Date.now() + '.' + ext, { type: blob.type });
+  try {
+    if (navigator.canShare && navigator.canShare({ files:[file] })) {
+      await navigator.share({ files:[file] });
+      $('msg').textContent = 'Pronto.\nConfira o vídeo no app Fotos.';
+      return;
+    }
+  } catch(e) {
+    if (e && e.name === 'AbortError') return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  $('msg').textContent = 'O vídeo foi para Downloads, no app Arquivos.\nDe lá é possível salvá-lo no Fotos.';
+}
+
+/* Eventos */
+$('start').addEventListener('click', openCam);
+$('back').addEventListener('click', closeCam);
+$('rec').addEventListener('click', () => recording ? stopAll() : startRec());
+$('pause').addEventListener('click', () => setRunning(!running));
+$('top').addEventListener('click', () => { y = 0; draw(); });
+$('slow').addEventListener('click', () => { S.sp = Math.max(1, S.sp - 1); store.set('sp', S.sp); $('sp').value = S.sp; $('spO').textContent = S.sp; applyLayout(); });
+$('fast').addEventListener('click', () => { S.sp = Math.min(20, S.sp + 1); store.set('sp', S.sp); $('sp').value = S.sp; $('spO').textContent = S.sp; applyLayout(); });
+view.addEventListener('click', () => setRunning(!running));
+/* arrastar o texto com o dedo para ajustar a posição */
+let dragY = null;
+view.addEventListener('touchstart', e => { dragY = e.touches[0].clientY; }, { passive:true });
+view.addEventListener('touchmove', e => {
+  if (dragY === null) return;
+  const ny = e.touches[0].clientY; y = Math.max(0, y - (ny - dragY)); dragY = ny; draw();
+}, { passive:true });
+view.addEventListener('touchend', () => { dragY = null; });
+$('save').addEventListener('click', save);
+$('again').addEventListener('click', () => { $('done').classList.add('hide'); openCam(); });
+$('toText').addEventListener('click', () => { $('done').classList.add('hide'); closeCam(); });
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && !$('stage').classList.contains('hide')) {
+    try { wake = await navigator.wakeLock?.request('screen'); } catch(e){}
+  }
+});
+applyLayout();
+}
+</script>
+</body>
+</html>
