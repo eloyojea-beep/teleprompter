@@ -212,13 +212,13 @@ async function openCam(){
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: HZ ? { facingMode:'user', width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} }
-               : { facingMode:'user', width:{ideal:1080}, height:{ideal:1920}, aspectRatio:{ideal:9/16}, frameRate:{ideal:30} },
+               : { facingMode:'user', width:{ideal:1440}, height:{ideal:1920}, frameRate:{ideal:30} },
       audio:{ echoCancellation:true, noiseSuppression:true }
     });
     $('cam').srcObject = stream;
     $('cam').onloadedmetadata = () => { loadZ(); placeFrame(); startDraw(); };
     setFraming(true);
-    tip('Modo enquadrar: o contorno branco é o que será gravado.\nEncaixe a cabeça e os ombros no desenho.\nToque no botão vermelho para gravar.');
+    tip('A cabeça deve caber no oval.\nRosto grande: afaste a câmera.\nRosto pequeno: use o zoom.\nToque no botão vermelho para gravar.');
   } catch(e) {
     stream = null;
     tip('Câmera indisponível.\nO texto rola, mas não grava.\nVerifique a permissão de câmera do Safari.');
@@ -400,21 +400,29 @@ function placeFrame(){
   f.style.width = w + 'px'; f.style.height = hh + 'px';
   Object.assign(cv.style, { left:f.style.left, top:f.style.top, width:f.style.width, height:f.style.height });
   const svg = $('fsvg'); svg.setAttribute('viewBox', '0 0 ' + w + ' ' + hh);
-  const cx = w / 2, hr = Math.min(w * 0.15, hh * 0.11), hy = hh / 3, sw = Math.min(w * 0.42, hr * 3.2);
+  const cx = w / 2, rx = Math.min(w * 0.2, hh * 0.13), ry = rx * 1.3, hy = hh * 0.36;
+  const nw = rx * 0.42, ny = hy + ry * 0.92, sy = hy + ry * 1.32, sw = Math.min(w * 0.44, rx * 2.6);
+  const side = s => {
+    const X = d => cx + s * d;
+    return 'M' + X(nw) + ' ' + ny + ' L' + X(nw) + ' ' + (sy - ry * 0.12) +
+      ' Q' + X(nw) + ' ' + sy + ' ' + X(nw + rx * 0.6) + ' ' + sy +
+      ' L' + X(sw - rx * 0.55) + ' ' + (sy + rx * 0.22) +
+      ' Q' + X(sw) + ' ' + (sy + rx * 0.3) + ' ' + X(sw) + ' ' + (sy + rx * 0.85) +
+      ' L' + X(sw) + ' ' + hh;
+  };
   svg.innerHTML =
     '<g id="grid" stroke="rgba(255,255,255,.5)" stroke-width="1">' +
       [1,2].map(i => '<line x1="' + w*i/3 + '" y1="0" x2="' + w*i/3 + '" y2="' + hh + '"/><line x1="0" y1="' + hh*i/3 + '" x2="' + w + '" y2="' + hh*i/3 + '"/>').join('') +
     '</g>' +
-    '<g id="guide" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="10 8" opacity=".9">' +
-      '<ellipse cx="' + cx + '" cy="' + hy + '" rx="' + hr + '" ry="' + hr*1.3 + '"/>' +
-      '<path d="M' + (cx - sw) + ' ' + hh + ' C' + (cx - sw*0.95) + ' ' + (hy + hr*2.3) + ' ' + (cx - hr*1.1) + ' ' + (hy + hr*1.9) + ' ' + cx + ' ' + (hy + hr*1.9) +
-      ' C' + (cx + hr*1.1) + ' ' + (hy + hr*1.9) + ' ' + (cx + sw*0.95) + ' ' + (hy + hr*2.3) + ' ' + (cx + sw) + ' ' + hh + '"/>' +
+    '<g id="guide" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="10 8" stroke-linejoin="round" opacity=".9">' +
+      '<ellipse cx="' + cx + '" cy="' + hy + '" rx="' + rx + '" ry="' + ry + '"/>' +
+      '<path d="' + side(-1) + ' ' + side(1) + '"/>' +
     '</g>';
 }
 function setFraming(on){
   $('stage').classList.toggle('framing', on);
   $('fbtn').classList.toggle('on', on);
-  if (on) { setRunning(false); tip('Modo enquadrar: o contorno branco é o que será gravado.\nEncaixe a cabeça e os ombros no desenho.\nUse o zoom e arraste a imagem para ajustar.'); }
+  if (on) { setRunning(false); tip('A cabeça deve caber no oval.\nRosto grande: afaste a câmera.\nRosto pequeno: use o zoom.\nUse o zoom e arraste a imagem para ajustar.'); }
   else if (!recording) tip('');
 }
 $('fbtn').addEventListener('click', () => setFraming(!$('stage').classList.contains('framing')));
