@@ -37,7 +37,15 @@ h1{margin:0;font-size:30px;line-height:1.1}
 
 /* Tela 2: prompter */
 #stage{position:fixed;inset:0;background:#000;overflow:hidden}
-#cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#cam{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform:scaleX(-1)}
+#frame{position:absolute;pointer-events:none;outline:2px solid rgba(255,255,255,.55);outline-offset:-1px}
+#frame svg{position:absolute;inset:0;width:100%;height:100%}
+#guide{display:none}
+#stage.framing #guide{display:block}
+#stage.framing #shade,#stage.framing #view{display:none}
+#stage.framing #grid{opacity:1}
+#grid{opacity:.35}
+#fbtn.on{background:#fff}#fbtn.on svg{fill:#000}
 #shade{position:absolute;left:0;right:0;top:0;height:var(--h,46%);background:linear-gradient(rgba(0,0,0,.82),rgba(0,0,0,.72) 85%,rgba(0,0,0,0))}
 #view{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 8px);height:calc(var(--h,46%) - env(safe-area-inset-top) - 8px);overflow:hidden;
   -webkit-mask-image:linear-gradient(transparent,#000 12%,#000 82%,transparent);mask-image:linear-gradient(transparent,#000 12%,#000 82%,transparent)}
@@ -47,10 +55,10 @@ h1{margin:0;font-size:30px;line-height:1.1}
 #count{position:absolute;inset:0;display:grid;place-items:center;font-size:140px;font-weight:700;color:#fff;text-shadow:0 2px 12px #000;pointer-events:none}
 #tip{white-space:pre-line;position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 112px);text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 4px #000;pointer-events:none}
 #bar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom) + 14px);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(transparent,rgba(0,0,0,.65))}
-.ic{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:15px;font-weight:700;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.ic{width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:15px;font-weight:700;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .ic svg{width:22px;height:22px;fill:#fff}
-#rec{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:transparent;display:grid;place-items:center}
-#rec i{display:block;width:58px;height:58px;border-radius:50%;background:var(--red);transition:all .2s}
+#rec{width:70px;height:70px;border-radius:50%;border:4px solid #fff;background:transparent;display:grid;place-items:center}
+#rec i{display:block;width:54px;height:54px;border-radius:50%;background:var(--red);transition:all .2s}
 #rec.on i{width:28px;height:28px;border-radius:7px}
 #spd{min-width:44px;text-align:center;color:#fff;font-size:14px;font-variant-numeric:tabular-nums}
 .grp{display:flex;align-items:center;gap:6px}
@@ -84,6 +92,7 @@ h1{margin:0;font-size:30px;line-height:1.1}
 
 <section id="stage" class="hide">
   <video id="cam" playsinline muted autoplay></video>
+  <div id="frame"><svg id="fsvg" preserveAspectRatio="none"></svg></div>
   <div id="shade"></div>
   <div id="view"><div id="text"></div></div>
   <div id="clock" class="hide">00:00</div>
@@ -98,6 +107,7 @@ h1{margin:0;font-size:30px;line-height:1.1}
     </div>
     <button id="rec" aria-label="Gravar"><i></i></button>
     <button class="ic" id="pause" aria-label="Rolar sem gravar"><svg viewBox="0 0 24 24" id="pIcon"><path d="M8 5v14l11-7z"/></svg></button>
+    <button class="ic" id="fbtn" aria-label="Enquadrar"><svg viewBox="0 0 24 24"><path d="M3 3h6v2H5v4H3zm12 0h6v6h-2V5h-4zM3 15h2v4h4v2H3zm16 0h2v6h-6v-2h4zM12 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm-5 10c0-2 2.2-3 5-3s5 1 5 3v1H7z"/></svg></button>
     <button class="ic" id="top" aria-label="Voltar ao início"><svg viewBox="0 0 24 24"><path d="M12 4 4 12l1.4 1.4L11 7.8V20h2V7.8l5.6 5.6L20 12z"/></svg></button>
   </div>
 </section>
@@ -185,11 +195,13 @@ async function openCam(){
   if (stream) return;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:'user', width:{ideal:1080}, height:{ideal:1920}, frameRate:{ideal:30} },
+      video:{ facingMode:'user', width:{ideal:1080}, height:{ideal:1920}, aspectRatio:{ideal:9/16}, frameRate:{ideal:30} },
       audio:{ echoCancellation:true, noiseSuppression:true }
     });
     $('cam').srcObject = stream;
-    tip('Toque no botão vermelho para gravar.\nToque no texto para pausar.');
+    $('cam').onloadedmetadata = placeFrame;
+    setFraming(true);
+    tip('Modo enquadrar: o contorno branco é o que será gravado.\nEncaixe a cabeça e os ombros no desenho.\nToque no botão vermelho para gravar.');
   } catch(e) {
     stream = null;
     tip('Câmera indisponível.\nO texto rola, mas não grava.\nVerifique a permissão de câmera do Safari.');
@@ -197,6 +209,7 @@ async function openCam(){
   }
 }
 function closeCam(){
+  setFraming(false);
   stopAll();
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   try { wake?.release(); } catch(e){} wake = null;
@@ -224,6 +237,7 @@ function pickMime(){
 
 async function startRec(){
   if (!stream) return;
+  setFraming(false);
   mime = pickMime();
   if (mime === null) { tip('Este aparelho não permite gravar pela página.\nAtualize o iOS.'); return; }
   $('rec').disabled = true; tip('');
@@ -302,6 +316,35 @@ document.addEventListener('visibilitychange', async () => {
     try { wake = await navigator.wakeLock?.request('screen'); } catch(e){}
   }
 });
+
+/* Enquadramento: contorno do quadro gravado, terços e silhueta */
+function placeFrame(){
+  const v = $('cam'), f = $('frame');
+  const vw = v.videoWidth, vh = v.videoHeight, W = innerWidth, H = innerHeight;
+  if (!vw || !vh) return;
+  const s = Math.min(W / vw, H / vh), w = vw * s, hh = vh * s;
+  f.style.left = (W - w) / 2 + 'px'; f.style.top = (H - hh) / 2 + 'px';
+  f.style.width = w + 'px'; f.style.height = hh + 'px';
+  const svg = $('fsvg'); svg.setAttribute('viewBox', '0 0 ' + w + ' ' + hh);
+  const cx = w / 2, hr = w * 0.15, hy = hh / 3;
+  svg.innerHTML =
+    '<g id="grid" stroke="rgba(255,255,255,.5)" stroke-width="1">' +
+      [1,2].map(i => '<line x1="' + w*i/3 + '" y1="0" x2="' + w*i/3 + '" y2="' + hh + '"/><line x1="0" y1="' + hh*i/3 + '" x2="' + w + '" y2="' + hh*i/3 + '"/>').join('') +
+    '</g>' +
+    '<g id="guide" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="10 8" opacity=".9">' +
+      '<ellipse cx="' + cx + '" cy="' + hy + '" rx="' + hr + '" ry="' + hr*1.3 + '"/>' +
+      '<path d="M' + (cx - w*0.42) + ' ' + hh + ' C' + (cx - w*0.40) + ' ' + (hy + hr*2.3) + ' ' + (cx - hr*1.1) + ' ' + (hy + hr*1.9) + ' ' + cx + ' ' + (hy + hr*1.9) +
+      ' C' + (cx + hr*1.1) + ' ' + (hy + hr*1.9) + ' ' + (cx + w*0.40) + ' ' + (hy + hr*2.3) + ' ' + (cx + w*0.42) + ' ' + hh + '"/>' +
+    '</g>';
+}
+function setFraming(on){
+  $('stage').classList.toggle('framing', on);
+  $('fbtn').classList.toggle('on', on);
+  if (on) { setRunning(false); tip('Modo enquadrar: o contorno branco é o que será gravado.\nEncaixe a cabeça e os ombros no desenho.\nToque de novo no ícone para ver o texto.'); }
+  else if (!recording) tip('');
+}
+$('fbtn').addEventListener('click', () => setFraming(!$('stage').classList.contains('framing')));
+addEventListener('resize', placeFrame);
 applyLayout();
 }
 </script>
