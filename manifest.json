@@ -1,6 +1,6 @@
 {
   "name": "Teleprompter",
-  "short_name": "Prompter",
+  "short_name": "Teleprompter",
   "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
